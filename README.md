@@ -1,7 +1,7 @@
 # sewer
 Small set of tools for my personal sewage processing.
 There are two things to control here. An airpump, airing the sewage and pumping sewage between compartments in the sewage processor.
-[[_TOC_]]
+
 ## Air pump
 Air pump control is straight forward. Running the pump for 30 minutes every hour is all it really takes.
 
