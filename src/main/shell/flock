@@ -1,0 +1,33 @@
+#!/bin/bash
+. /etc/sewage/config
+STATE=$1
+case $STATE in
+	on|ON)
+		raspi-gpio set $FLOCK_PUMP_PIN op dh 
+		;;
+	off|OFF)
+		raspi-gpio set $FLOCK_PUMP_PIN op dl
+		;;
+	toggle|TOGGLE)
+		state=$[ 1 - $(raspi-gpio get $FLOCK_PUMP_PIN | cut -d\   -f3| cut -d= -f2) ]
+		case $state in
+			0)
+				raspi-gpio set $FLOCK_PUMP_PIN op dl
+				STATE=off
+				;;
+			1)
+				raspi-gpio set $FLOCK_PUMP_PIN op dh
+				STATE=on
+				;;
+		esac
+		;;
+
+	*)
+		cat<<EOH
+Usage: $0 (on|off)
+EOH
+		exit 1
+		;;
+esac
+log flock info "Turning flocking agent pump $STATE"
+

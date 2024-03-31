@@ -1,0 +1,8 @@
+#!/bin/bash
+. /etc/sewage/config
+
+log flocker info "Adding flocking agent for $FLOCK_PUMP_TIME seconds"
+raspi-gpio set $FLOCK_PUMP_PIN op dh 
+sleep $FLOCK_PUMP_TIME
+raspi-gpio set $FLOCK_PUMP_PIN op dl
+log flocker info "Finished"

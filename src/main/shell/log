@@ -1,0 +1,8 @@
+#!/bin/bash
+DOMAIN=$1
+LEVEL=$2
+MESSAGE=$3
+TS=$(date -Ins)
+LOG_FILE=/var/log/sewage
+echo -e "$TS\t[$DOMAIN]\t$LEVEL\t$MESSAGE" >> $LOG_FILE
+

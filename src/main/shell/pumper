@@ -1,0 +1,8 @@
+#!/bin/bash
+. /etc/sewage/config
+log pumper info "Pumping for $PUMP_TIME"
+raspi-gpio set $PUMP_PIN op dh
+sleep $PUMP_TIME
+raspi-gpio set $PUMP_PIN op dl
+log pumper info "Finished"
+

@@ -1,0 +1,13 @@
+#!/bin/bash
+. /etc/sewage/config
+s=0
+while true ; do 
+	s1=$(raspi-gpio get $PUMP_BUTTON_PIN | cut -d\   -f3| cut -d= -f2)
+	[ $s -ne $s1 ] && {  
+		[ $s1 -eq 1 ] && {
+			pump toggle
+		}	
+		s=$s1  
+	}
+	sleep 0.6
+done

@@ -1,0 +1,183 @@
+#!/usr/bin/perl
+use strict;
+use warnings;
+
+use POSIX qw/strftime/;
+
+my $LOGGER = '/usr/local/bin/log';
+my $config = Config->new("/etc/sewage/config");
+
+my $today = strftime("%Y-%m-%d", localtime);
+
+my @services = (
+	Flock->new($config),
+	Air->new($config)
+);
+
+while(<>) {
+	my($date,$timeText,$service,$level,$message) = $_ =~ /(.{10})T([0-9]{2}:[0-9]{2}:[0-9]{2},[0-9]{4}).*\[(.*)\]\t+(.*)\t+(.*)/;
+	my $time = to_seconds( $timeText );
+	next unless($date eq $today);
+	next unless( $service );
+	foreach my $svc( @services ) {
+		if($svc->is_mine($service)){
+			$svc->parse($message, $time);
+			last;
+		}
+	}
+}
+
+foreach my $svc( @services ) {
+	print($svc->to_string(), "\n");
+	logg($svc->{_service}, 'info', "Summary for $today. " . $svc->to_string());
+}
+
+sub to_seconds {
+	my $timeText = shift;
+	my($hours,$minutes,$seconds, $fractions ) = $timeText =~ /([0-9]{2}):([0-9]{2}):([0-9]{2}),([0-9]{4})/;
+	return ($hours * 3600) + ( $minutes * 60 ) + $seconds + ( $fractions / 10000 );
+}
+
+sub logg {
+	my( $domain, $level, $message ) = @_;
+	`$LOGGER "$domain" "$level" "$message"`;	
+}
+
+########
+package Air;
+
+sub new {
+	my $class = shift;
+	my $config = shift;
+	my ($pump_time) = $config->{'PUMP_TIME'} =~ /^([0-9]+)/;
+	my $self = {
+		nominal => 0,
+		actual => 0,
+		nominal_ratio => $pump_time / 60,
+		_active => 0,
+		_start => 0,
+		_service => 'pumper',
+		_config => $config
+	};
+	bless $self, ref($class) || $class;
+	return $self;
+}
+
+sub is_mine {
+	my $self = shift;
+	my $what_service = shift;
+	return $what_service eq $self->{_service};
+}
+
+sub parse {
+	my $self = shift;
+	my $message = shift;
+	my $time = shift;
+	if( $message =~ /^Pumping/ ){
+		$self->{_active} = 1;
+		$self->{_start} = $time;
+	}
+	elsif( $message =~ /^Finished/ ){
+		my $actual_time = $time - $self->{_start};
+		$self->{actual} += $actual_time;
+		$self->{_active} = $self->{_start} = 0;
+	}
+}
+
+sub minutes {
+	my $self = shift;
+	return $self->{actual} / 60;
+}
+
+sub actual_ratio {
+	my $self = shift;
+	my $minutes_per_day = 60*24;
+	return $self->minutes() / $minutes_per_day;
+}
+
+sub to_string {
+	my $self = shift;
+	my $ratio = sprintf("%.0f%%", $self->actual_ratio() * 100);
+	my $minutes = sprintf("%.0f", $self->minutes());
+	my $nominal_ratio = sprintf("%.0f%%", $self->{nominal_ratio} * 100);
+	return "Pumped for $minutes minutes. Ratio: $ratio (nominal: $nominal_ratio)";
+}
+
+########
+
+package Flock;
+
+sub new {
+	my $class = shift;
+	my $config = shift;
+	my $self = {
+		nominal => 0,
+		actual => 0,
+		nominal_count => $config->{'FLOCK_PER_DAY_COUNT'},
+		nominal_amount_per_day => $config->{'FLOCK_ML_PER_DAY_PER_PERSON'} * $config->{'HOUSEHOLD_PERSON_COUNT'},
+		rate => $config->{'FLOCK_SEC_PER_ML'},
+		_active => 0,
+		_start => 0,
+		_service => 'flocker',
+		_config => $config
+	};
+	bless $self, ref($class) || $class;
+	return $self;
+}
+
+sub is_mine {
+	my $self = shift;
+	my $what_service = shift;
+	return $what_service eq $self->{_service};
+}
+
+sub parse {
+	my $self = shift;
+	my $message = shift;
+	my $time = shift;
+	if(my ($flock) = $message =~ /^Adding flocking agent for ([0-9.]+) seconds/ ) {
+		$self->{nominal} += $flock;
+		$self->{_active} = 1;
+		$self->{_start} = $time;
+	}elsif($message =~ /^Finished/){
+		my $actual_time = $time - $self->{_start};
+		$self->{actual} += $actual_time;
+		$self->{_active} = $self->{_start} = 0;
+	}
+}
+
+sub total_amount {
+	my $self = shift;
+	# Amount pumped is actual time divided by seconds per ml
+	return $self->{actual}/$self->{rate};
+}
+
+sub to_string {
+	my $self = shift;
+	my $actual_time = sprintf("%.3f", $self->{actual});
+	my $total_amount = sprintf("%.1f", $self->total_amount());
+	return "Added $total_amount ml (nominal: $self->{nominal_amount_per_day})"
+}
+########
+
+package Config;
+
+sub new {
+	my $class = shift;
+	my $self = {
+		_fileName => shift
+	};
+	bless $self, ref($class) || $class;
+	$self->read_file();
+	return $self;
+}
+
+sub read_file {
+	my $self = shift;
+	open CONF, '<', $self->{_fileName} || die("Filed opening configuration file:", $!);
+	while(<CONF>) {
+		my($key, $value) = $_ =~ /^([A-Z0-9_]+)=(.+)/;
+		$self->{$key} = $value;
+	}
+	close CONF;
+}

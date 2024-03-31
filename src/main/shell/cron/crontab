@@ -1,0 +1,8 @@
+# Add flocking agent every four hours
+23 2,6,10,14,18,22  * * *   root    /usr/local/bin/flocker
+
+# Start air pump once per hour
+12	*	* * *	root	/usr/local/bin/pumper
+
+# Write a 24 hour summary to the log for air pump and flocking agent
+55 23	* * *	root	/usr/local/bin/sewagesummary /var/log/sewage

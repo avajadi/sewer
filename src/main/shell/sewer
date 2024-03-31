@@ -1,0 +1,7 @@
+#!/bin/bash
+. /etc/sewage/config
+
+echo "Compressor: $(raspi-gpio get $PUMP_PIN | cut -d\   -f3| cut -d= -f2)"
+echo "Flocking agent pump: $(raspi-gpio get $FLOCK_PUMP_PIN | cut -d\   -f3| cut -d= -f2)"
+
+
