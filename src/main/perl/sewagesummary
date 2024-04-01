@@ -3,7 +3,9 @@ use strict;
 use warnings;
 
 use POSIX qw/strftime/;
+use Switch;
 
+use Data::Dumper;
 my $LOGGER = '/usr/local/bin/log';
 my $config = Config->new("/etc/sewage/config");
 
@@ -118,7 +120,7 @@ sub new {
 		rate => $config->{'FLOCK_SEC_PER_ML'},
 		_active => 0,
 		_start => 0,
-		_service => 'flocker',
+		_service => {'flocker' => 1,'flock' => 1 },
 		_config => $config
 	};
 	bless $self, ref($class) || $class;
@@ -128,7 +130,7 @@ sub new {
 sub is_mine {
 	my $self = shift;
 	my $what_service = shift;
-	return $what_service eq $self->{_service};
+	return $self->{_service}{$what_service}||0;
 }
 
 sub parse {
@@ -143,6 +145,22 @@ sub parse {
 		my $actual_time = $time - $self->{_start};
 		$self->{actual} += $actual_time;
 		$self->{_active} = $self->{_start} = 0;
+	}elsif( my ($state) = $message =~ /Turning flocking agent pump (on|off)/) {
+		switch( $state ) {
+			case "on" {
+				$self->{_active} = 1;
+				$self->{_start} = $time;
+			}
+			case "off" {
+				my $actual_time = $time - $self->{_start};
+				$self->{actual} += $actual_time;
+				$self->{_active} = $self->{_start} = 0;
+				print("Manual $actual_time added\n");#DEBUG
+			}
+			else {
+				logg($self->{_service}, "warn", "Found unknown state '$state' in log file");
+			}
+		}
 	}
 }
 
